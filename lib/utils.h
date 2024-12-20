@@ -29,6 +29,7 @@ void delete_hash_table(hash_table* table);
 int _exists_in_subarray(int* arr, int start, int end, int value);
 int _min_value_index(double* values, size_t size);
 int compare(const void* a, const void* b);
+int compare_desc(const void* a, const void* b);
 void _reverse_subarray(int* arr, int start, int end);
 int compare_fitness(const void* a, const void* b);
 void write_array_to_csv(const char* filename, double** arr, size_t size_x, size_t size_y);

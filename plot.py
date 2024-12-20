@@ -72,7 +72,7 @@ def run(problem, alg, plot_flag):
         worst_values = []
         avg_values = []
 
-        if (alg == "sa"):
+        if (alg == "sa" or alg == "hybrid"):
             best_values = df.iloc[0]
         else:
             for index, row in df.iterrows():
@@ -90,7 +90,7 @@ def run(problem, alg, plot_flag):
             plt.figure(figsize=(10,6))
             
             plt.plot(best_values, label="Best values", linestyle='-', color='green')
-            if (alg == "sa"):
+            if (alg == "sa" or alg == "hybrid"):
                 start_min = 0
                 current_min = float('inf')
                 size = len(best_values)
@@ -120,27 +120,39 @@ def compare(problem):
         result_path_ea = f"Solution/{problem}/{problem}-ea/output{i}.csv"
         result_path_ts = f"Solution/{problem}/{problem}-ts/output{i}.csv"
         result_path_sa = f"Solution/{problem}/{problem}-sa/output{i}.csv"
+        result_path_aco = f"Solution/{problem}/{problem}-aco/output{i}.csv"
+        result_path_hybrid = f"Solution/{problem}/{problem}-hybrid/output{i}.csv"
 
         best_values_ea = []
         best_values_ts = []
         best_values_sa = []
+        best_values_aco = []
+        best_values_hybrid = []
 
         df_ea = pd.read_csv(result_path_ea, header=None)
         df_ts = pd.read_csv(result_path_ts, header=None)
         df_sa = pd.read_csv(result_path_sa, header=None)
+        df_aco = pd.read_csv(result_path_aco, header=None)
+        df_hybrid = pd.read_csv(result_path_hybrid, header=None)
 
         best_values_sa = df_sa.iloc[0]
+        best_values_hybrid = df_hybrid.iloc[0]
 
         for index, row in df_ea.iterrows():
             best_values_ea.append(row.min())
         
         for index, row in df_ts.iterrows():
             best_values_ts.append(row.min())
+
+        for index, row in df_aco.iterrows():
+            best_values_aco.append(row.min())
         
         plt.figure(figsize=(10,6))
         plt.plot(best_values_ea, label="EA", linestyle='-', color='green')
         plt.plot(best_values_ts, label="TS", linestyle='-', color='blue')
         plt.plot(best_values_sa, label="SA", linestyle='-', color='red')
+        plt.plot(best_values_aco, label="ACO", linestyle='-', color='black')
+        plt.plot(best_values_hybrid, label="HD", linestyle='-', color='orange')
         plt.xlabel("Iteration")
         plt.ylabel("Value")
         plt.title("Comparison of algorithms")
@@ -152,39 +164,57 @@ def compare_normalize(problem):
         result_path_ea = f"Solution/{problem}/{problem}-ea/output{i}.csv"
         result_path_ts = f"Solution/{problem}/{problem}-ts/output{i}.csv"
         result_path_sa = f"Solution/{problem}/{problem}-sa/output{i}.csv"
+        result_path_aco = f"Solution/{problem}/{problem}-aco/output{i}.csv"
+        result_path_hybrid = f"Solution/{problem}/{problem}-hybrid/output{i}.csv"
 
         best_values_ea = []
         best_values_ts = []
         best_values_sa = []
+        best_values_aco = []
+        best_values_hybrid = []
 
         df_ea = pd.read_csv(result_path_ea, header=None)
         df_ts = pd.read_csv(result_path_ts, header=None)
         df_sa = pd.read_csv(result_path_sa, header=None)
+        df_aco = pd.read_csv(result_path_aco, header=None)
+        df_hybrid = pd.read_csv(result_path_hybrid, header=None)
 
         best_values_sa = df_sa.iloc[0]
+        best_values_hybrid = df_hybrid.iloc[0]
 
         for index, row in df_ea.iterrows():
             best_values_ea.append(row.min())
         
         for index, row in df_ts.iterrows():
             best_values_ts.append(row.min())
+
+        for index, row in df_aco.iterrows():
+            best_values_aco.append(row.min())
         
         scaler = MinMaxScaler()
         ea_scaled = scaler.fit_transform(np.array(best_values_ea).reshape(-1, 1)).flatten()
         ts_scaled = scaler.fit_transform(np.array(best_values_ts).reshape(-1, 1)).flatten()
         sa_scaled = scaler.fit_transform(np.array(best_values_sa).reshape(-1, 1)).flatten()
+        aco_scaled = scaler.fit_transform(np.array(best_values_aco).reshape(-1, 1)).flatten()
+        hybrid_scaled = scaler.fit_transform(np.array(best_values_hybrid).reshape(-1, 1)).flatten()
 
         max_length = max(len(best_values_ea), len(best_values_ts))
         max_length = max(max_length, len(best_values_sa))
+        max_length = max(max_length, len(best_values_aco))
+        max_length = max(max_length, len(best_values_hybrid))
 
         ea_int = np.interp(np.linspace(0, len(best_values_ea)-1, max_length), np.arange(len(best_values_ea)), ea_scaled)
         ts_int = np.interp(np.linspace(0, len(best_values_ts)-1, max_length), np.arange(len(best_values_ts)), ts_scaled)
         sa_int = np.interp(np.linspace(0, len(best_values_sa)-1, max_length), np.arange(len(best_values_sa)), sa_scaled)
+        aco_int = np.interp(np.linspace(0, len(best_values_aco)-1, max_length), np.arange(len(best_values_aco)), aco_scaled)
+        hybrid_int = np.interp(np.linspace(0, len(best_values_hybrid)-1, max_length), np.arange(len(best_values_hybrid)), hybrid_scaled)
         
         plt.figure(figsize=(10,6))
         plt.plot(ea_int, label="EA", linestyle='-', color='green')
         plt.plot(ts_int, label="TS", linestyle='-', color='blue')
         plt.plot(sa_int, label="SA", linestyle='-', color='red')
+        plt.plot(aco_int, label="ACO", linestyle='-', color='black')
+        plt.plot(hybrid_int, label="HD", linestyle='-', color='orange')
         plt.xlabel("Iteration")
         plt.ylabel("Value")
         plt.title("Comparison of algorithms")
@@ -195,12 +225,16 @@ def box(problem):
     result_path_ea = f"Solution/{problem}/{problem}-ea/results.txt"
     result_path_ts = f"Solution/{problem}/{problem}-ts/results.txt"
     result_path_sa = f"Solution/{problem}/{problem}-sa/results.txt"
+    result_path_aco = f"Solution/{problem}/{problem}-aco/results.txt"
+    result_path_hybrid = f"Solution/{problem}/{problem}-hybrid/results.txt"
 
     rgx = r"Best value:\s*([0-9.]+)"
 
     results_ea = []
     results_ts = []
     results_sa = []
+    results_aco = []
+    results_hybrid = []
 
     with open(result_path_ea, 'r') as f:
         for i in range(10):
@@ -209,7 +243,6 @@ def box(problem):
                 mtch = re.search(rgx, line)
                 if mtch:
                     results_ea.append(float(mtch.group(1)))
-
 
     with open(result_path_ts, 'r') as f:
         for i in range(10):
@@ -226,21 +259,39 @@ def box(problem):
                 mtch = re.search(rgx, line)
                 if mtch:
                     results_sa.append(float(mtch.group(1)))
+    
+    with open(result_path_aco, 'r') as f:
+        for i in range(10):
+            line = f.readline()
+            if line:
+                mtch = re.search(rgx, line)
+                if mtch:
+                    results_aco.append(float(mtch.group(1)))
+
+    with open(result_path_hybrid, 'r') as f:
+        for i in range(10):
+            line = f.readline()
+            if line:
+                mtch = re.search(rgx, line)
+                if mtch:
+                    results_hybrid.append(float(mtch.group(1)))
 
     data = [
         GREEDY_VALUES[problem],
         results_ea,
         results_ts,
-        results_sa
+        results_sa,
+        results_aco,
+        results_hybrid
     ]
 
     plt.figure(figsize=(8,6))
     box = plt.boxplot(data, patch_artist=True, vert=True)
     plt.title("Comparison of algorithms")
-    colors = ["yellow", "green", "red", "blue"]
+    colors = ["yellow", "green", "red", "blue", "black", "orange"]
     for patch, color in zip(box['boxes'], colors):
         patch.set_facecolor(color)
-    plt.xticks([1,2,3,4], ["GR", "EA", "TS", "SA"])
+    plt.xticks([1,2,3,4,5,6], ["GR", "EA", "TS", "SA", "ACO", "HD"])
     plt.ylabel("Value")
 
     plt.show()
@@ -250,7 +301,7 @@ def best_route(problem):
     best_route_value = float('inf')
 
     for i in range(10):
-        result_path_sa = f"Solution/{problem}/{problem}-sa/output{i}.csv"
+        result_path_sa = f"Solution/{problem}/{problem}-hybrid/output{i}.csv"
 
         df_sa = pd.read_csv(result_path_sa, header=None)
 
@@ -264,7 +315,7 @@ def best_route(problem):
                 min_value = value
                 min_index = index
 
-        result_path_sa = f"Solution/{problem}/{problem}-sa/str_output{i}.csv"
+        result_path_sa = f"Solution/{problem}/{problem}-hybrid/str_output{i}.csv"
         df_sa_str = pd.read_csv(result_path_sa, header=None)
 
         genes = df_sa_str.iloc[0]

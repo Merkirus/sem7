@@ -248,6 +248,153 @@ void mutation_inversion(invidual* inv, int idx1, int idx2) {
     _reverse_subarray(inv->gene.entries, idx1, idx2);
 }
 
+void update_pheromones(double** total_pheromones, ant* a, size_t prob_size) {
+    double pheromone_value = 10000.0 / a->solution->fitness;
+    for (int i = 0; i < prob_size - 1; i++) {
+        int from = a->solution->gene.entries[i];
+        int to = a->solution->gene.entries[i+1];
+        total_pheromones[from][to] += pheromone_value;
+        total_pheromones[to][from] += pheromone_value;
+    }
+
+    int from = a->solution->gene.entries[prob_size - 1];
+    int to = a->solution->gene.entries[0];
+    total_pheromones[from][to] += pheromone_value;
+    total_pheromones[to][from] += pheromone_value;
+}
+
+void evaporate_pheromones(double** total_pheromones, double rho, size_t prob_size) {
+    for (int i = 0; i < prob_size; i++)
+        for (int j = 0; j < prob_size; j++)
+        total_pheromones[i][j] *= (1 - rho);
+    
+}
+
+void ant_traverse(ant* a, double** distance_matrix, double** total_pheromones, double alpha, double beta, size_t prob_size) {
+    for (int i = 1; i < prob_size; i++) { // Loop through all steps except the starting point
+        double traversal[prob_size];
+        double total_traversal = 0.0;
+
+        // Calculate probabilities for all possible moves
+        for (int j = 0; j < prob_size; j++) {
+            if (a->visited.entries[j]) {
+                traversal[j] = 0; // Already visited nodes are not eligible
+            } else {
+                double distance = distance_matrix[a->current_position][j];
+                double pheromone = total_pheromones[a->current_position][j];
+
+                // Ensure valid inputs
+                if (distance <= 0.0) distance = 1e-10; // Prevent divide by zero
+                if (pheromone <= 0.0) pheromone = 1e-10; // Prevent invalid pow()
+
+                double v1 = pow(pheromone, alpha);
+                double v2 = pow(1.0 / distance, beta);
+                traversal[j] = v1 * v2;
+                total_traversal += traversal[j];
+            }
+        }
+
+        // Normalize probabilities
+        if (total_traversal > 0) {
+            for (int j = 0; j < prob_size; j++) {
+                traversal[j] /= total_traversal;
+            }
+        } else {
+            fprintf(stderr, "Error: Total traversal probability is zero!\n");
+            exit(EXIT_FAILURE);
+        }
+
+        // Select destination based on probability
+        double random_value = PROB(); // Generate a random number between 0 and 1
+        double cumulative_probability = 0.0;
+        int dest = -1;
+
+        for (int j = 0; j < prob_size; j++) {
+            if (!a->visited.entries[j]) {
+                cumulative_probability += traversal[j];
+                if (random_value <= cumulative_probability) {
+                    dest = j;
+                    break;
+                }
+            }
+        }
+
+        // Fallback: If no destination was chosen (should not happen)
+        if (dest == -1) {
+            fprintf(stderr, "Warning: No valid destination selected using probabilities. Using fallback.\n");
+            double max_probability = -1.0;
+            for (int j = 0; j < prob_size; j++) {
+                if (!a->visited.entries[j] && traversal[j] > max_probability) {
+                    max_probability = traversal[j];
+                    dest = j;
+                }
+            }
+        }
+
+        // Move the ant to the chosen destination
+        if (dest != -1) {
+            move_ant(a, dest);
+        } else {
+            fprintf(stderr, "Error: No valid move available for the ant.\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
+// void ant_traverse(ant* a, double** distance_matrix, double** total_pheromones, double alpha, double beta, size_t prob_size) {
+//     for (int i = 1; i < prob_size; i++) { // - 1 because we skip starting_point
+//         double traversal[prob_size];
+//         double total_travesal = 0.0;
+
+//         for (int j = 0; j < prob_size; j++) {
+//             if (a->visited.entries[j])
+//                 traversal[j] = 0;
+//             else {
+//                 double distance = distance_matrix[a->current_position][j];
+//                 double pheromone = total_pheromones[a->current_position][j];
+//                 double v1 = pow(pheromone, alpha);
+//                 double v2 = pow(1.0 / distance, beta);
+//                 double path_value = v1 * v2;
+//                 traversal[j] = path_value;
+//                 total_travesal += path_value;
+//             }
+//         }
+
+//         for (int j = 0; j < prob_size; j++) {
+//             traversal[j] /= total_travesal; // normalizing
+//         }
+
+//         int dest = -1;
+
+//         double add_traversal = 0.0;
+//         for (int j = 0; j < prob_size; j++) {
+//             if (!a->visited.entries[j]) {
+//                 add_traversal += traversal[j];
+//                 if (add_traversal >= PROB()) {
+//                     dest = j;
+//                     break;
+//                 }
+//             }
+//         }
+
+//         if (dest == -1) {
+//             double max_value = -1.0;
+//             int index = 0;
+//             for (int j = 0; j < prob_size; j++) {
+//                 if (!a->visited.entries[j]) {
+//                     if (max_value < traversal[j]) {
+//                         max_value = traversal[j];
+//                         index = j;
+//                     }
+//                 }
+//             }
+//             dest = index;
+//         }
+
+//         move_ant(a, dest);
+//     }
+// }
+
 invidual** alg_greedy(problem* prob) {
     size_t size = prob->distance_matrix.size_x;
     
@@ -700,3 +847,215 @@ invidual*** alg_sa(problem* prob, int iter_size, int* iter_count, int neighbour_
 
 //     return results;
 // }
+
+invidual*** alg_aoc(problem* prob, int iter_size, int ant_size, int evaporation_flag, double alpha, double beta, double rho) {
+    size_t prob_size = prob->distance_matrix.size_x;
+
+    invidual*** results = (invidual***)malloc(iter_size * sizeof(invidual**));
+
+    for (int i = 0; i < iter_size; i++)
+        results[i] = (invidual**)malloc(ant_size * sizeof(invidual*));
+
+    for (int i = 0; i < iter_size; i++)
+        for (int j = 0; j < ant_size; j++)
+            results[i][j] = (invidual*)malloc(sizeof(invidual));
+
+    double** total_pheromones = (double**)malloc(prob_size * sizeof(double*));
+    for (int j = 0; j < prob_size; j++)
+        total_pheromones[j] = (double*)malloc(prob_size * sizeof(double));
+
+    for (int j = 0; j < prob_size; j++)
+        for (int k = 0; k < prob_size; k++)
+            total_pheromones[j][k] = 0.0;
+
+    for (int i = 0; i < iter_size; i++) {
+        ant** as = (ant**)malloc(ant_size * sizeof(ant*));
+        for (int j = 0; j < ant_size; j++) {
+            as[j] = (ant*)malloc(sizeof(ant));
+            int starting_position = RANDOM(0, prob_size - 1);
+            as[j] = create_ant(starting_position, prob_size);
+        }
+
+        for (int j = 0; j < ant_size; j++) {
+            ant_traverse(as[j], prob->distance_matrix.entries, total_pheromones, alpha, beta, prob_size);
+            as[j]->solution->fitness = evaluate_invidual(prob, as[j]->solution);
+            update_pheromones(total_pheromones, as[j], prob_size);
+            if (evaporation_flag)
+                evaporate_pheromones(total_pheromones, rho, prob_size);
+        }
+
+        // if (evaporation_flag)
+        //     evaporate_pheromones(total_pheromones, rho, prob_size);
+
+        for (int j = 0; j < ant_size; j++)
+            results[i][j] = copy_invidual(as[j]->solution);
+        
+        
+        for (int j = 0; j < ant_size; j++) {
+            delete_ant(as[j]);
+        }
+        free(as);
+    }
+
+    return results;
+}
+
+invidual*** alg_hybrid(problem* prob, int tabu_iter_size, int sa_iter_size, int tabu_neighbour_size, int sa_neightbour_size, int tabu_size, double start_temp, double end_temp, double alpha, int mutation_flag) {
+    invidual* current_inv = create_invidual_random(prob->distance_matrix.size_x);
+    current_inv->fitness = evaluate_invidual(prob, current_inv);
+
+    invidual*** results = (invidual***)malloc(sizeof(invidual**));
+
+    results[0] = (invidual**)malloc(tabu_iter_size * sizeof(invidual*));
+
+    for (int j = 0; j < tabu_iter_size; j++)
+        results[0][j] = (invidual*)malloc(sizeof(invidual));
+    
+    tabu_list* global_tabu_list = create_tabu_list(tabu_size);
+    tabu_list* local_tabu_list = NULL;
+    
+    void (*m1)(invidual*,int,int);
+    void (*m2)(invidual*,int,int);
+
+    if (mutation_flag) {
+        m1 = mutation_inversion;
+        m2 = mutation_single_swap;
+    } else {
+        m1 = mutation_single_swap;
+        m2 = mutation_inversion;
+    }
+    
+    for (int t = 0; t < tabu_iter_size; t++) {
+        if (local_tabu_list == NULL)
+            local_tabu_list = create_tabu_list(tabu_size);
+        
+        
+        invidual** neighbours = (invidual**)malloc(tabu_neighbour_size * sizeof(invidual*));
+        for (int i = 0; i < tabu_neighbour_size; i++) neighbours[i] = (invidual*)malloc(sizeof(invidual));
+        int neighbour_count = 0;
+        int best_move_idx = 0;
+
+        tabu_move* temp_holder[tabu_neighbour_size];
+
+        while (neighbour_count < tabu_neighbour_size) {
+            int idx1 = RANDOM(0, current_inv->gene.size - 1);
+            int idx2 = RANDOM(idx1, current_inv->gene.size - 1);
+            tabu_move* tm = create_tabu_move(mutation_flag, idx1, idx2, TABU_TENURE);
+            if (!is_tabu(global_tabu_list, tm)) {
+                neighbours[neighbour_count] = copy_invidual(current_inv);
+                m1(neighbours[neighbour_count], idx1, idx2);
+                neighbours[neighbour_count]->fitness = evaluate_invidual(prob, neighbours[neighbour_count]);
+                temp_holder[neighbour_count] = tm;
+                neighbour_count++;
+                // add_tabu_move(global_tabu_list, tm);
+            }
+        }
+
+        invidual* best_neighbour = NULL;
+
+        for (int j = 0; j < neighbour_count; j++) {
+            if (best_neighbour == NULL || neighbours[j]->fitness < best_neighbour->fitness) {
+                best_neighbour = neighbours[j];
+                best_move_idx = j;
+            }
+        }
+
+        if (current_inv != NULL) {
+            delete_invidual(current_inv);
+            current_inv = NULL;
+        }
+
+        current_inv = copy_invidual(best_neighbour);
+
+        tabu_move* best_move = copy_tabu_move(temp_holder[best_move_idx]);
+
+
+        for (int i = 0; i < tabu_neighbour_size; i++)
+            delete_invidual(neighbours[i]);
+
+        free(neighbours);
+
+        for (int i = 0; i < tabu_neighbour_size; i++)
+            free(temp_holder[i]);
+
+        add_tabu_move(global_tabu_list, best_move);
+
+        double temp = start_temp;
+        int iter_count = 0;
+        
+        while (temp > end_temp && iter_count < sa_iter_size) {
+            invidual** neighbours2 = (invidual**)malloc(sa_neightbour_size * sizeof(invidual*));
+            for (int i = 0; i < sa_neightbour_size; i++) neighbours2[i] = (invidual*)malloc(sizeof(invidual));
+            int neighbour_count2 = 0;
+            int best_move_idx2 = 0;
+
+            tabu_move* temp_holder2[sa_neightbour_size];
+
+            while (neighbour_count2 < sa_neightbour_size) {
+                int idx1 = RANDOM(0, current_inv->gene.size - 1);
+                int idx2 = RANDOM(idx1, current_inv->gene.size - 1);
+                tabu_move* tm = create_tabu_move(!mutation_flag, idx1, idx2, TABU_TENURE);
+                if (!is_tabu(local_tabu_list, tm)) {
+                    neighbours2[neighbour_count2] = copy_invidual(current_inv);
+                    m2(neighbours2[neighbour_count2], idx1, idx2);
+                    neighbours2[neighbour_count2]->fitness = evaluate_invidual(prob, neighbours2[neighbour_count2]);
+                    temp_holder2[neighbour_count2] = tm;
+                    neighbour_count2++;
+                }
+            }
+
+            invidual* best_neighbour2 = NULL;
+
+            for (int j = 0; j < neighbour_count2; j++) {
+                if (best_neighbour2 == NULL || neighbours2[j]->fitness < best_neighbour2->fitness) {
+                    best_neighbour2 = neighbours2[j];
+                    best_move_idx2 = j;
+                }
+            }
+
+            double delta = best_neighbour2->fitness - current_inv->fitness;
+            
+            if (delta < 0 || exp(-delta / temp) > PROB()) {
+                if (current_inv != NULL) {
+                    delete_invidual(current_inv);
+                    current_inv = NULL;
+                }
+
+                current_inv = copy_invidual(best_neighbour2);
+
+                iter_count++;
+
+                tabu_move* best_move = copy_tabu_move(temp_holder2[best_move_idx2]);
+
+                add_tabu_move(local_tabu_list, best_move);
+
+                update_tabu_list(local_tabu_list);
+            }
+
+            for (int i = 0; i < sa_neightbour_size; i++)
+                delete_invidual(neighbours2[i]);
+
+            free(neighbours2);
+
+            temp *= alpha;
+        }
+
+        if (local_tabu_list != NULL) {
+            delete_tabu_list(local_tabu_list);
+            local_tabu_list = NULL;
+        }
+
+        results[0][t] = copy_invidual(current_inv);
+    }
+
+    if (local_tabu_list != NULL)
+        delete_tabu_list(local_tabu_list);
+    local_tabu_list = NULL;
+
+    delete_invidual(current_inv);
+    if (global_tabu_list != NULL)
+        delete_tabu_list(global_tabu_list);
+    global_tabu_list = NULL;
+    
+    return results;
+}

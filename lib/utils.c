@@ -98,6 +98,10 @@ int compare(const void* a, const void* b) {
     return (*(double*)a - *(double*)b);
 }
 
+int compare_desc(const void* a, const void* b) {
+    return (*(double*)b - *(double*)a);
+}
+
 void _reverse_subarray(int* arr, int start, int end) {
     while (start < end) {
         int temp = arr[start];

@@ -6,6 +6,8 @@
 #define METADATA_SIZE 7
 #define DEPOT 0
 
+int EVAL_COUNT = 0;
+
 invidual* create_invidual_empty(size_t gene_size) {
     invidual* inv = (invidual*)malloc(sizeof(invidual));
     inv->gene.size = gene_size;
@@ -107,8 +109,58 @@ double evaluate_invidual(problem* prob, invidual* inv) {
     }
 
     distance += prob->distance_matrix.entries[curr_station][DEPOT];
+    
+    EVAL_COUNT++;
+    
+    if (distance == 0.0)
+        return 10000.0;
 
     return distance;
+}
+
+ant* create_ant(int starting_postition, size_t gene_size) {
+    ant* a = (ant*)malloc(sizeof(ant));
+    a->starting_position = starting_postition;
+    a->current_index = 0;
+    a->solution = create_invidual_empty(gene_size);
+    a->pheromones.size_x = gene_size;
+    a->pheromones.size_y = gene_size;
+    a->pheromones.entries = (double**)malloc(gene_size * sizeof(double*));
+    for (int i = 0; i < gene_size; i++)
+        a->pheromones.entries[i] = (double*)calloc(gene_size, sizeof(double));
+    a->visited.size = gene_size;
+    a->visited.entries = (int*)calloc(gene_size, sizeof(int));
+    move_ant(a, a->starting_position);
+    return a;
+}
+
+void delete_ant(ant* a) {
+    if (a == NULL)
+        return;
+
+    delete_invidual(a->solution);
+    if (a->pheromones.entries != NULL) {
+        for (int i = 0; i < a->pheromones.size_x; i++) {
+            if (a->pheromones.entries[i])
+                free(a->pheromones.entries[i]);
+        }
+        free(a->pheromones.entries);
+    }
+
+    if (a->visited.entries != NULL)
+        free(a->visited.entries);
+    
+    free(a);
+}
+
+void move_ant(ant* a, int destination) {
+    // printf("%f\n",a->current_index);
+    // printf("%d\n",a->solution->gene.size);
+    // printf("%f\n",a->current_index);
+    // printf("%f\n",a->current_index);
+    a->solution->gene.entries[a->current_index++] = destination;
+    a->visited.entries[destination] = 1;
+    a->current_position = destination; 
 }
 
 tabu_move* create_tabu_move(int move_type, int idx1, int idx2, int lifespan) {
